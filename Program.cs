@@ -86,6 +86,45 @@ namespace port_scanner
             
     }
 
+    public class Scanner{
+        private readonly Channel<ItemToScan> channel;
+        private readonly ChannelReader<ItemToScan> reader;
+        private readonly int taskAmount;
+        
+
+        public Scanner(int numberOfTasks, Channel<ItemToScan> unboundChannel)
+        {
+            channel = unboundChannel;
+            reader = channel.Reader;
+            taskAmount = numberOfTasks;
+            
+        }
+
+        public async Task StartScanAsync(){
+            var tasks = new List<Task>();
+
+            for (int i = 0; i < taskAmount; i++)
+            {
+                tasks.Add(Task.Run(ScanPortsAsync));
+            }
+
+            await Task.WhenAll(tasks);
+        }
+
+        public async Task ScanPortsAsync(){
+            
+            while (await reader.WaitToReadAsync())
+            {
+                if (reader.TryRead(out ItemToScan task))
+                {
+                    var ip = task.IP;
+                    var port = task.Port;
+                }
+            }
+        }
+
+    }
+
        
     
     public class Program
