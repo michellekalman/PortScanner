@@ -4,6 +4,7 @@ using System.Threading.Channels;
 using Microsoft.VisualBasic;
 using System.Linq;
 using System.Net;
+using port_scanner;
 
 namespace port_scanner
 {
@@ -44,19 +45,52 @@ namespace port_scanner
             }
         }
     }
-    public class ManagementComponent
+    public class MissionSupplier
     {
         
         private readonly Channel<ItemToScan> channel;
         private readonly ChannelWriter<ItemToScan> writer;
+        private IPAddress startIP;
+        private IPAddress endIP;
+        private int[] ports;
 
-        public ManagementComponent()
+        public MissionSupplier(IPAddress startIPAddr, IPAddress endIPAddr, int[] portArray)
         {
             channel = Channel.CreateUnbounded<ItemToScan>();
             writer = channel.Writer;
+            startIP = startIPAddr;
+            endIP = endIPAddr;
+            ports = portArray;
         }
 
         public void Run()
+        {  
+            List<IPAddress> ips = [.. IPRangeGenerator.GetIPRange(startIP, endIP)];
+
+            // Generate all IP and port combinations
+            var ipPortPairs = ips.SelectMany(
+                ip => ports,
+                (ip, port) => (IP: ip, Port: port)
+            ).ToList();
+
+            foreach (var (IP, Port) in ipPortPairs)
+            {
+                bool success = writer.TryWrite(new ItemToScan(IP, Port));
+                Console.WriteLine(success
+                    ? $"Message '{IP} {Port}' written to the channel."
+                    : $"Failed to write {IP} {Port} to the channel.");
+            } 
+            
+            
+        }
+            
+    }
+
+       
+    
+    public class Program
+    {
+        public static void Main(string[] args)
         {
             while(true)
             {
@@ -78,7 +112,6 @@ namespace port_scanner
                 // Parse the start and end IP strings to IPAddress objects
                 IPAddress startIP = IPAddress.Parse(words[0]);
                 IPAddress endIP = IPAddress.Parse(words[1]);
-                List<IPAddress> ips = [.. IPRangeGenerator.GetIPRange(startIP, endIP)];
 
                 string[] str_ports = words[2].Split(',');
                 int[] ports = str_ports
@@ -87,39 +120,11 @@ namespace port_scanner
                 .Select(n => n.Value)     // Convert back to int
                 .ToArray();
 
-                // Generate all IP and port combinations
-                var ipPortPairs = ips.SelectMany(
-                    ip => ports,
-                    (ip, port) => (IP: ip, Port: port)
-                ).ToList();
+                MissionSupplier mc = new MissionSupplier(startIP, endIP, ports);
+                mc.Run();
 
-                foreach (var (IP, Port) in ipPortPairs)
-                {
-                    bool success = writer.TryWrite(new ItemToScan(IP, Port));
-                    Console.WriteLine(success
-                        ? $"Message '{IP} {Port}' written to the channel."
-                        : $"Failed to write {IP} {Port} to the channel.");
-                } 
-                
-                
             }
             
         }
-
-        
-
-       
     }
-    public class Program
-    {
-        public static void Main(string[] args)
-        {
-            ManagementComponent mc = new ManagementComponent();
-            mc.Run();
-        }
-    }
-
-    
-
-
 }
