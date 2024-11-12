@@ -99,14 +99,7 @@ namespace port_scanner
                     Console.WriteLine(success
                         ? $"Message '{IP} {Port}' written to the channel."
                         : $"Failed to write {IP} {Port} to the channel.");
-                }
-
-
-
-
-
-
-                    
+                } 
                 
                 
             }
@@ -117,6 +110,16 @@ namespace port_scanner
 
        
     }
+    public class Program
+    {
+        public static void Main(string[] args)
+        {
+            ManagementComponent mc = new ManagementComponent();
+            mc.Run();
+        }
+    }
+
+    
 
 
 }

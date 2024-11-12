@@ -1,0 +1,15 @@
+C:\Users\MichelleKalman\Desktop\C# training\PortScanner-1\bin\Debug\net8.0\PortScanner.exe
+C:\Users\MichelleKalman\Desktop\C# training\PortScanner-1\bin\Debug\net8.0\PortScanner.deps.json
+C:\Users\MichelleKalman\Desktop\C# training\PortScanner-1\bin\Debug\net8.0\PortScanner.runtimeconfig.json
+C:\Users\MichelleKalman\Desktop\C# training\PortScanner-1\bin\Debug\net8.0\PortScanner.dll
+C:\Users\MichelleKalman\Desktop\C# training\PortScanner-1\bin\Debug\net8.0\PortScanner.pdb
+C:\Users\MichelleKalman\Desktop\C# training\PortScanner-1\obj\Debug\net8.0\PortScanner.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\MichelleKalman\Desktop\C# training\PortScanner-1\obj\Debug\net8.0\PortScanner.AssemblyInfoInputs.cache
+C:\Users\MichelleKalman\Desktop\C# training\PortScanner-1\obj\Debug\net8.0\PortScanner.AssemblyInfo.cs
+C:\Users\MichelleKalman\Desktop\C# training\PortScanner-1\obj\Debug\net8.0\PortScanner.csproj.CoreCompileInputs.cache
+C:\Users\MichelleKalman\Desktop\C# training\PortScanner-1\obj\Debug\net8.0\PortScanner.sourcelink.json
+C:\Users\MichelleKalman\Desktop\C# training\PortScanner-1\obj\Debug\net8.0\PortScanner.dll
+C:\Users\MichelleKalman\Desktop\C# training\PortScanner-1\obj\Debug\net8.0\refint\PortScanner.dll
+C:\Users\MichelleKalman\Desktop\C# training\PortScanner-1\obj\Debug\net8.0\PortScanner.pdb
+C:\Users\MichelleKalman\Desktop\C# training\PortScanner-1\obj\Debug\net8.0\PortScanner.genruntimeconfig.cache
+C:\Users\MichelleKalman\Desktop\C# training\PortScanner-1\obj\Debug\net8.0\ref\PortScanner.dll
