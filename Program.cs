@@ -10,15 +10,15 @@ namespace port_scanner
     
     public class ItemToScan
     {
-        private readonly string ip_addr;
+        private readonly IPAddress ip_addr;
         private readonly int port;
 
-        public ItemToScan(string ip_address, int port_number)
+        public ItemToScan(IPAddress ip_address, int port_number)
         {
             ip_addr = ip_address;
             port = port_number;
         }
-        public string IP
+        public IPAddress IP
         {
             get => ip_addr;
         }
@@ -48,10 +48,12 @@ namespace port_scanner
     {
         
         private readonly Channel<ItemToScan> channel;
+        private readonly ChannelWriter<ItemToScan> writer;
 
         public ManagementComponent()
         {
             channel = Channel.CreateUnbounded<ItemToScan>();
+            writer = channel.Writer;
         }
 
         public void Run()
@@ -91,14 +93,16 @@ namespace port_scanner
                     (ip, port) => (IP: ip, Port: port)
                 ).ToList();
 
+                foreach (var (IP, Port) in ipPortPairs)
+                {
+                    bool success = writer.TryWrite(new ItemToScan(IP, Port));
+                    Console.WriteLine(success
+                        ? $"Message '{IP} {Port}' written to the channel."
+                        : $"Failed to write {IP} {Port} to the channel.");
+                }
 
 
-                var wordsList = words.ToList();
 
-                wordsList.RemoveAt(0);
-                wordsList.RemoveAt(1);
-
-                words = wordsList.ToArray();
 
 
 
