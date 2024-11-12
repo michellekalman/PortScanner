@@ -54,9 +54,9 @@ namespace port_scanner
         private IPAddress endIP;
         private int[] ports;
 
-        public MissionSupplier(IPAddress startIPAddr, IPAddress endIPAddr, int[] portArray)
+        public MissionSupplier(IPAddress startIPAddr, IPAddress endIPAddr, int[] portArray, Channel<ItemToScan> unboundChannel)
         {
-            channel = Channel.CreateUnbounded<ItemToScan>();
+            channel = unboundChannel;
             writer = channel.Writer;
             startIP = startIPAddr;
             endIP = endIPAddr;
@@ -120,7 +120,8 @@ namespace port_scanner
                 .Select(n => n.Value)     // Convert back to int
                 .ToArray();
 
-                MissionSupplier mc = new MissionSupplier(startIP, endIP, ports);
+                Channel<ItemToScan> channel = Channel.CreateUnbounded<ItemToScan>();
+                MissionSupplier mc = new MissionSupplier(startIP, endIP, ports, channel);
                 mc.Run();
 
             }
