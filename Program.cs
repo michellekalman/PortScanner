@@ -220,7 +220,7 @@ namespace port_scanner
             using var cancellationTokenSource = new CancellationTokenSource();
             var cancellationToken = cancellationTokenSource.Token;
 
-            Console.WriteLine("Enter start ip address, end ip address and ports");
+            Console.WriteLine("Enter ip range(cidr notation supported) and ports");
             string? input = Console.ReadLine();
 
 
