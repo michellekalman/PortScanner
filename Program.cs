@@ -46,32 +46,59 @@ namespace port_scanner
                 yield return new IPAddress(bytes);
             }
         }
+
+        public static IEnumerable<IPAddress> GetIPRangeFromCIDR(IPAddress startIP, int subnet)
+        {
+            
+
+            uint baseAddress = BitConverter.ToUInt32(startIP.GetAddressBytes().Reverse().ToArray(), 0);
+            uint mask = uint.MaxValue << (32 - subnet);
+            uint start = baseAddress & mask;
+            uint end = start | ~mask;
+
+            for (uint current = start + 1; current < end; current++) // Exclude network and broadcast
+            {
+                yield return new IPAddress(BitConverter.GetBytes(current).Reverse().ToArray());
+            }
+        }
     }
     public class MissionSupplier
     {
         
         private readonly ChannelWriter<ItemToScan> writer;
         private IPAddress startIP;
-        private IPAddress endIP;
+        private IPAddress? endIP;
         private int[] ports;
+        private int _subnet;
 
-        public MissionSupplier(IPAddress startIPAddr, IPAddress endIPAddr, int[] portArray, Channel<ItemToScan> unboundChannel)
+        public MissionSupplier(IPAddress startIPAddr, int[] portArray, Channel<ItemToScan> unboundChannel, int subnet, IPAddress? endIPAddr = null)
         {
             writer = unboundChannel.Writer;
             startIP = startIPAddr;
             endIP = endIPAddr;
             ports = portArray;
+            _subnet = subnet;
         }
         public async Task RunAsync(CancellationToken cancellationToken)
         {  
-            List<IPAddress> ips = [.. IPRangeGenerator.GetIPRange(startIP, endIP)];
+            List<IPAddress> ips;
+            if (endIP != null)
+            {
+                ips = [.. IPRangeGenerator.GetIPRange(startIP, endIP)];
 
+            }
+            else if(_subnet != -1){
+                ips = [.. IPRangeGenerator.GetIPRangeFromCIDR(startIP, _subnet)];
+            }
+            else{
+                throw new ArgumentException("Invalid arguments.");
+            }
             // Generate all IP and port combinations
             var ipPortPairs = ips.SelectMany(
                 ip => ports,
                 (ip, port) => (IP: ip, Port: port)
             ).ToList();
-
+            
             foreach (var (IP, Port) in ipPortPairs)
             {
                 if (cancellationToken.IsCancellationRequested) break;
@@ -213,17 +240,40 @@ namespace port_scanner
 
             if(!string.IsNullOrEmpty(input))
             {
+                IPAddress startIP;
+                IPAddress? endIP = null;
+                int subnet = -1;
                 string[] words = input.Split(' ');
-                if (words.Length != 3){
-                    Console.WriteLine("Invalid input!");
-                    return;
+
+                if(input.Contains("/"))
+                {
+                    if (words.Length != 2){
+                        Console.WriteLine("Invalid input!");
+                        return;
+                    }
+
+                    var parts = words[0].Split('/');
+                    if (parts.Length != 2 || !IPAddress.TryParse(parts[0], out startIP) || !int.TryParse(parts[1], out subnet))
+                    {
+                        throw new ArgumentException("Invalid CIDR notation.");
+                    }
                 }
 
-                // Parse the start and end IP strings to IPAddress objects
-                IPAddress startIP = IPAddress.Parse(words[0]);
-                IPAddress endIP = IPAddress.Parse(words[1]);
+                else
+                {
+                    if (words.Length != 3)
+                    {
+                    Console.WriteLine("Invalid input!");
+                    return;
+                    }
 
-                string[] str_ports = words[2].Split(',');
+                    // Parse the start and end IP strings to IPAddress objects
+                    startIP = IPAddress.Parse(words[0]);
+                    endIP = IPAddress.Parse(words[1]);
+
+                    
+                }
+                string[] str_ports = words.Last().Split(',');
                 int[] ports = str_ports
                 .Select(s => int.TryParse(s, out int result) ? result : (int?)null)  // Use nullable int to handle failures
                 .Where(n => n.HasValue)   // Filter out nulls (failed parses)
@@ -231,7 +281,7 @@ namespace port_scanner
                 .ToArray();
 
                 Channel<ItemToScan> channel = Channel.CreateUnbounded<ItemToScan>();
-                MissionSupplier missionSupplier = new MissionSupplier(startIP, endIP, ports, channel);
+                MissionSupplier missionSupplier = new MissionSupplier(startIP, ports, channel, subnet, endIP);
                 Scanner scanner = new(10, channel, "output_file.txt");
                 Task supplierTask = missionSupplier.RunAsync(cancellationToken);
                 Task scannerTask = scanner.StartScanAsync(cancellationToken);
@@ -242,6 +292,7 @@ namespace port_scanner
                 // Wait for remaining tasks to finish if cancellation was requested
                 await supplierTask;
                 await scannerTask;
+                
                 }
             else
                 {
