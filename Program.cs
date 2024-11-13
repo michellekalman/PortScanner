@@ -50,7 +50,6 @@ namespace port_scanner
     public class MissionSupplier
     {
         
-        private readonly Channel<ItemToScan> channel;
         private readonly ChannelWriter<ItemToScan> writer;
         private IPAddress startIP;
         private IPAddress endIP;
@@ -58,14 +57,12 @@ namespace port_scanner
 
         public MissionSupplier(IPAddress startIPAddr, IPAddress endIPAddr, int[] portArray, Channel<ItemToScan> unboundChannel)
         {
-            channel = unboundChannel;
-            writer = channel.Writer;
+            writer = unboundChannel.Writer;
             startIP = startIPAddr;
             endIP = endIPAddr;
             ports = portArray;
         }
-
-        public void Run()
+        public async Task RunAsync(CancellationToken cancellationToken)
         {  
             List<IPAddress> ips = [.. IPRangeGenerator.GetIPRange(startIP, endIP)];
 
@@ -77,14 +74,12 @@ namespace port_scanner
 
             foreach (var (IP, Port) in ipPortPairs)
             {
-                bool success = writer.TryWrite(new ItemToScan(IP, Port));
-                Console.WriteLine(success
-                    ? $"Message '{IP} {Port}' written to the channel."
-                    : $"Failed to write {IP} {Port} to the channel.");
+                if (cancellationToken.IsCancellationRequested) break;
+                await writer.WriteAsync(new ItemToScan(IP, Port), cancellationToken); 
+                Console.WriteLine($"Message '{IP} {Port}' written to the channel.");
             } 
-            writer.Complete();
-            
-            
+
+            writer.Complete(); 
         }
             
     }
@@ -95,7 +90,6 @@ namespace port_scanner
         private readonly int taskAmount;
         private readonly StreamWriter _outputFileWriter;
         private readonly object fileLock = new object();
-
         
 
         public Scanner(int numberOfTasks, Channel<ItemToScan> unboundChannel, string outputFileName)
@@ -106,51 +100,75 @@ namespace port_scanner
             
         }
 
-        public async Task StartScanAsync(){
+        public async Task StartScanAsync(CancellationToken cancellationToken)
+        {
             var tasks = new List<Task>();
 
             for (int i = 0; i < taskAmount; i++)
             {
-                tasks.Add(Task.Run(ScanPortsAsync));
+                tasks.Add(Task.Run(() => ScanPortsAsync(cancellationToken), cancellationToken));
             }
 
-            await Task.WhenAll(tasks);
+            try
+            {
+                await Task.WhenAll(tasks);
+            }
+            catch (OperationCanceledException)
+            {
+                Console.WriteLine("Scanning tasks were canceled.");
+            }
         }
 
-        public async Task ScanPortsAsync(){
-            
-            
-            while (await reader.WaitToReadAsync())
+        public async Task ScanPortsAsync(CancellationToken cancellationToken)
+        {
+            try
             {
-                if (reader.TryRead(out ItemToScan task))
+            
+            
+                while (await reader.WaitToReadAsync(cancellationToken))
                 {
-                    var ip = task.IP;
-                    var port = task.Port;
-                    bool IsPortOpen = await IsPortOpenAsync(ip, port);                  
-                    
-                    var result = new
-                    {
-                        TargetIp = ip.ToString(),
-                        Port = port,
-                        IsOpen = IsPortOpen
-                    };
+                    if (cancellationToken.IsCancellationRequested) break;
 
-                    lock (fileLock)
+
+                    if (reader.TryRead(out ItemToScan task))
                     {
-                        _outputFileWriter.WriteLine(JsonSerializer.Serialize(result));
-                        _outputFileWriter.Flush(); // Ensure data is written immediately
+                        var ip = task.IP;
+                        var port = task.Port;
+                        bool IsPortOpen = await IsPortOpenAsync(ip, port, cancellationToken);                  
+                        
+                        var result = new
+                        {
+                            TargetIp = ip.ToString(),
+                            Port = port,
+                            IsOpen = IsPortOpen
+                        };
+
+                        lock (fileLock)
+                        {
+                            _outputFileWriter.WriteLine(JsonSerializer.Serialize(result));
+                            _outputFileWriter.Flush(); // Ensure data is written immediately
+                        }
                     }
                 }
             }
+
+            catch (OperationCanceledException)
+            {
+                // Expected exception on cancellation; silently exit the loop
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error in ScanPortsAsync: {ex.Message}");
+            }
         }
 
-        private async Task<bool> IsPortOpenAsync(IPAddress ip, int port, int timeout = 1000)
+        private async Task<bool> IsPortOpenAsync(IPAddress ip, int port, CancellationToken cancellationToken, int timeout = 1000)
         {
             using var client = new TcpClient();
             try
             {
                 var connectTask = client.ConnectAsync(ip.ToString(), port);
-                return await Task.WhenAny(connectTask, Task.Delay(timeout)) == connectTask;
+                return await Task.WhenAny(connectTask, Task.Delay(timeout, cancellationToken)) == connectTask;
             }
             catch
             {
@@ -171,21 +189,34 @@ namespace port_scanner
     {
         public static async Task Main(string[] args)
         {
-            while(true)
-            {
-                Console.WriteLine("Enter start ip address, end ip address and ports");
-                string? input = Console.ReadLine();
 
-                if (string.IsNullOrEmpty(input))
+            using var cancellationTokenSource = new CancellationTokenSource();
+            var cancellationToken = cancellationTokenSource.Token;
+
+            Console.WriteLine("Enter start ip address, end ip address and ports");
+            string? input = Console.ReadLine();
+
+
+            var waitForExitTask = Task.Run(() =>
+            {
+                while (true)
                 {
-                    Console.WriteLine("No input received.");
-                    break;
+                    string additionalInput = Console.ReadLine()?.Trim().ToLower();
+                    if (additionalInput == "exit")
+                    {
+                        Console.WriteLine("Exiting program...");
+                        cancellationTokenSource.Cancel(); // Signal cancellation to all tasks
+                        break;
+                    }
                 }
-                
+            });
+
+            if(!string.IsNullOrEmpty(input))
+            {
                 string[] words = input.Split(' ');
                 if (words.Length != 3){
                     Console.WriteLine("Invalid input!");
-                    break;
+                    return;
                 }
 
                 // Parse the start and end IP strings to IPAddress objects
@@ -200,13 +231,26 @@ namespace port_scanner
                 .ToArray();
 
                 Channel<ItemToScan> channel = Channel.CreateUnbounded<ItemToScan>();
-                MissionSupplier mc = new MissionSupplier(startIP, endIP, ports, channel);
-                mc.Run();
+                MissionSupplier missionSupplier = new MissionSupplier(startIP, endIP, ports, channel);
                 Scanner scanner = new(10, channel, "output_file.txt");
-                await scanner.StartScanAsync();
+                Task supplierTask = missionSupplier.RunAsync(cancellationToken);
+                Task scannerTask = scanner.StartScanAsync(cancellationToken);
 
-            }
-            
+
+                await Task.WhenAny(Task.WhenAll(supplierTask, scannerTask), waitForExitTask);
+
+                // Wait for remaining tasks to finish if cancellation was requested
+                await supplierTask;
+                await scannerTask;
+                }
+            else
+                {
+                    Console.WriteLine("No input received.");
+                }
+
+            Console.WriteLine("Program has exited.");
+
         }
+            
     }
 }
