@@ -1,10 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Net.Sockets;
 using System.Threading.Channels;
 using Microsoft.VisualBasic;
 using System.Linq;
 using System.Net;
 using port_scanner;
+using System.Text.Json;
 
 namespace port_scanner
 {
@@ -80,23 +82,27 @@ namespace port_scanner
                     ? $"Message '{IP} {Port}' written to the channel."
                     : $"Failed to write {IP} {Port} to the channel.");
             } 
+            writer.Complete();
             
             
         }
             
     }
 
-    public class Scanner{
-        private readonly Channel<ItemToScan> channel;
+    public class Scanner : IDisposable
+    {
         private readonly ChannelReader<ItemToScan> reader;
         private readonly int taskAmount;
+        private readonly StreamWriter _outputFileWriter;
+        private readonly object fileLock = new object();
+
         
 
-        public Scanner(int numberOfTasks, Channel<ItemToScan> unboundChannel)
+        public Scanner(int numberOfTasks, Channel<ItemToScan> unboundChannel, string outputFileName)
         {
-            channel = unboundChannel;
-            reader = channel.Reader;
+            reader = unboundChannel.Reader;
             taskAmount = numberOfTasks;
+            _outputFileWriter = new StreamWriter(outputFileName, append: true);
             
         }
 
@@ -113,14 +119,48 @@ namespace port_scanner
 
         public async Task ScanPortsAsync(){
             
+            
             while (await reader.WaitToReadAsync())
             {
                 if (reader.TryRead(out ItemToScan task))
                 {
                     var ip = task.IP;
                     var port = task.Port;
+                    bool IsPortOpen = await IsPortOpenAsync(ip, port);                  
+                    
+                    var result = new
+                    {
+                        TargetIp = ip.ToString(),
+                        Port = port,
+                        IsOpen = IsPortOpen
+                    };
+
+                    lock (fileLock)
+                    {
+                        _outputFileWriter.WriteLine(JsonSerializer.Serialize(result));
+                        _outputFileWriter.Flush(); // Ensure data is written immediately
+                    }
                 }
             }
+        }
+
+        private async Task<bool> IsPortOpenAsync(IPAddress ip, int port, int timeout = 1000)
+        {
+            using var client = new TcpClient();
+            try
+            {
+                var connectTask = client.ConnectAsync(ip.ToString(), port);
+                return await Task.WhenAny(connectTask, Task.Delay(timeout)) == connectTask;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        public void Dispose()
+        {
+            _outputFileWriter.Dispose();
         }
 
     }
@@ -129,7 +169,7 @@ namespace port_scanner
     
     public class Program
     {
-        public static void Main(string[] args)
+        public static async Task Main(string[] args)
         {
             while(true)
             {
@@ -162,6 +202,8 @@ namespace port_scanner
                 Channel<ItemToScan> channel = Channel.CreateUnbounded<ItemToScan>();
                 MissionSupplier mc = new MissionSupplier(startIP, endIP, ports, channel);
                 mc.Run();
+                Scanner scanner = new(10, channel, "output_file.txt");
+                await scanner.StartScanAsync();
 
             }
             
