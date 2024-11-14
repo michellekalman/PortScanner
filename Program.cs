@@ -6,19 +6,14 @@ using System.Text.Json;
 namespace port_scanner
 {
     
-    public class ItemToScan
+    public class ItemToScan(IPAddress ipAddress, int portNumber)
     {
-        private readonly IPAddress ip_addr;
-        private readonly int port;
+        private readonly IPAddress ip = ipAddress;
+        private readonly int port = portNumber;
 
-        public ItemToScan(IPAddress ip_address, int port_number)
-        {
-            ip_addr = ip_address;
-            port = port_number;
-        }
         public IPAddress IP
         {
-            get => ip_addr;
+            get => ip;
         }
 
         public int Port
