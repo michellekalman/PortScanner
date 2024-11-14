@@ -101,12 +101,15 @@ namespace port_scanner
             
     }
 
-    public class Scanner(int numberOfTasks, Channel<ItemToScan> unboundChannel, string outputFileName) : IDisposable
+    public class Scanner(int numberOfTasks, Channel<ItemToScan> unboundChannel, string tcpOutputFileName, string httpOutputFileName) : IDisposable
     {
         private readonly ChannelReader<ItemToScan> _reader = unboundChannel.Reader;
         private readonly int _taskAmount = numberOfTasks;
-        private readonly StreamWriter _outputFileWriter = new StreamWriter(outputFileName, append: true);
-        private readonly object _fileLock = new object();
+        private readonly StreamWriter _tcpOutputFileWriter = new(tcpOutputFileName, append: true);
+        private readonly StreamWriter _httpOutputFileWriter = new(httpOutputFileName, append: true);
+        private readonly object _tcpFileLock = new();
+        private readonly object _httpFileLock = new();
+        private readonly HttpClient _httpClient = new();
 
         public async Task StartScanAsync(CancellationToken cancellationToken)
         {
@@ -151,10 +154,14 @@ namespace port_scanner
                             IsOpen = IsPortOpen
                         };
 
-                        lock (_fileLock)
+                        lock (_tcpFileLock)
                         {
-                            _outputFileWriter.WriteLine(JsonSerializer.Serialize(result));
-                            _outputFileWriter.Flush(); // Ensure data is written immediately
+                            _tcpOutputFileWriter.WriteLine(JsonSerializer.Serialize(result));
+                            _tcpOutputFileWriter.Flush(); // Ensure data is written immediately
+                        }
+                        
+                        if(IsPortOpen){
+                            await PerformHTTPScanAsync(ip, port, cancellationToken);
                         }
                     }
                 }
@@ -184,9 +191,46 @@ namespace port_scanner
             }
         }
 
+        private async Task PerformHTTPScanAsync(IPAddress ip, int port, CancellationToken cancellationToken)
+        {
+            try
+            {
+                var url = $"http://{ip}:{port}";
+                using var request = new HttpRequestMessage(HttpMethod.Get, url);
+                using var response = await _httpClient.SendAsync(request, cancellationToken);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var httpInfo = new
+                    {
+                        TargetIp = ip.ToString(),
+                        Port = port,
+                        StatusCode = response.StatusCode,
+                        Headers = response.Headers
+                    };
+
+                    lock (_httpFileLock)
+                    {
+                        _httpOutputFileWriter.WriteLine(JsonSerializer.Serialize(httpInfo));
+                        _httpOutputFileWriter.Flush(); // Ensure HTTP log is written immediately
+                    }
+                }
+            }
+            catch (HttpRequestException ex)
+            {
+                Console.WriteLine($"HTTP scan failed for {ip}:{port} - {ex.Message}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error in HTTP scan for {ip}:{port} - {ex.Message}");
+            }
+        }
+
         public void Dispose()
         {
-            _outputFileWriter.Dispose();
+            _tcpOutputFileWriter.Dispose();
+            _httpOutputFileWriter.Dispose();
+            
         }
 
     }
@@ -267,7 +311,7 @@ namespace port_scanner
 
                 Channel<ItemToScan> channel = Channel.CreateUnbounded<ItemToScan>();
                 MissionSupplier missionSupplier = new(startIP, ports, channel, subnet, endIP);
-                Scanner scanner = new(10, channel, "output_file.txt");
+                Scanner scanner = new(10, channel, "tcp_output_file.txt", "http_output_file.txt");
                 Task supplierTask = missionSupplier.RunAsync(cancellationToken);
                 Task scannerTask = scanner.StartScanAsync(cancellationToken);
 

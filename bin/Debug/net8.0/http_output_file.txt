@@ -1,0 +1,2 @@
+{"TargetIp":"127.0.0.2","Port":8080,"StatusCode":200,"Headers":[{"Key":"Server","Value":["SimpleHTTP/0.6","Python/3.11.3"]},{"Key":"Date","Value":["Thu, 14 Nov 2024 08:49:13 GMT"]}]}
+{"TargetIp":"127.0.0.1","Port":8080,"StatusCode":200,"Headers":[{"Key":"Server","Value":["SimpleHTTP/0.6","Python/3.11.3"]},{"Key":"Date","Value":["Thu, 14 Nov 2024 08:49:13 GMT"]}]}
