@@ -254,8 +254,8 @@ namespace port_scanner
 
                     
                 }
-                string[] str_ports = words.Last().Split(',');
-                int[] ports = str_ports
+                string[] strPorts = words.Last().Split(',');
+                int[] ports = strPorts
                 .Select(s => int.TryParse(s, out int result) ? result : (int?)null)  // Use nullable int to handle failures
                 .Where(n => n.HasValue)   // Filter out nulls (failed parses)
                 .Select(n => n.Value)     // Convert back to int
