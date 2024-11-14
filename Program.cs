@@ -170,7 +170,7 @@ namespace port_scanner
             }
         }
 
-        private async Task<bool> IsPortOpenAsync(IPAddress ip, int port, CancellationToken cancellationToken, int timeout = 1000)
+        private static async Task<bool> IsPortOpenAsync(IPAddress ip, int port, CancellationToken cancellationToken, int timeout = 1000)
         {
             using var client = new TcpClient();
             try
@@ -262,7 +262,7 @@ namespace port_scanner
                 .ToArray();
 
                 Channel<ItemToScan> channel = Channel.CreateUnbounded<ItemToScan>();
-                MissionSupplier missionSupplier = new MissionSupplier(startIP, ports, channel, subnet, endIP);
+                MissionSupplier missionSupplier = new(startIP, ports, channel, subnet, endIP);
                 Scanner scanner = new(10, channel, "output_file.txt");
                 Task supplierTask = missionSupplier.RunAsync(cancellationToken);
                 Task scannerTask = scanner.StartScanAsync(cancellationToken);

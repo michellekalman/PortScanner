@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("PortScanner")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+39f33c6b662d51521a7d6d5fcc069d3e78957915")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+e136309704bd26fa341ae32905d88ee67e1d8493")]
 [assembly: System.Reflection.AssemblyProductAttribute("PortScanner")]
 [assembly: System.Reflection.AssemblyTitleAttribute("PortScanner")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
