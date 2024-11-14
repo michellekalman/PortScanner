@@ -60,73 +60,64 @@ namespace port_scanner
     public class MissionSupplier
     {
         
-        private readonly ChannelWriter<ItemToScan> writer;
-        private IPAddress startIP;
-        private IPAddress? endIP;
-        private int[] ports;
-        private int _subnet;
+        private readonly ChannelWriter<ItemToScan> _writer;
+        private readonly IPAddress _startIP;
+        private readonly IPAddress? _endIP;
+        private readonly int[] _ports;
+        private readonly int _subnet;
 
         public MissionSupplier(IPAddress startIPAddr, int[] portArray, Channel<ItemToScan> unboundChannel, int subnet, IPAddress? endIPAddr = null)
         {
-            writer = unboundChannel.Writer;
-            startIP = startIPAddr;
-            endIP = endIPAddr;
-            ports = portArray;
+            _writer = unboundChannel.Writer;
+            _startIP = startIPAddr;
+            _endIP = endIPAddr;
+            _ports = portArray;
             _subnet = subnet;
         }
         public async Task RunAsync(CancellationToken cancellationToken)
         {  
             List<IPAddress> ips;
-            if (endIP != null)
+            if (_endIP != null)
             {
-                ips = [.. IPRangeGenerator.GetIPRange(startIP, endIP)];
+                ips = [.. IPRangeGenerator.GetIPRange(_startIP, _endIP)];
 
             }
             else if(_subnet != -1){
-                ips = [.. IPRangeGenerator.GetIPRangeFromCIDR(startIP, _subnet)];
+                ips = [.. IPRangeGenerator.GetIPRangeFromCIDR(_startIP, _subnet)];
             }
             else{
                 throw new ArgumentException("Invalid arguments.");
             }
             // Generate all IP and port combinations
             var ipPortPairs = ips.SelectMany(
-                ip => ports,
+                ip => _ports,
                 (ip, port) => (IP: ip, Port: port)
             ).ToList();
             
             foreach (var (IP, Port) in ipPortPairs)
             {
                 if (cancellationToken.IsCancellationRequested) break;
-                await writer.WriteAsync(new ItemToScan(IP, Port), cancellationToken); 
+                await _writer.WriteAsync(new ItemToScan(IP, Port), cancellationToken); 
                 Console.WriteLine($"Message '{IP} {Port}' written to the channel.");
             } 
 
-            writer.Complete(); 
+            _writer.Complete(); 
         }
             
     }
 
-    public class Scanner : IDisposable
+    public class Scanner(int numberOfTasks, Channel<ItemToScan> unboundChannel, string outputFileName) : IDisposable
     {
-        private readonly ChannelReader<ItemToScan> reader;
-        private readonly int taskAmount;
-        private readonly StreamWriter _outputFileWriter;
-        private readonly object fileLock = new object();
-        
-
-        public Scanner(int numberOfTasks, Channel<ItemToScan> unboundChannel, string outputFileName)
-        {
-            reader = unboundChannel.Reader;
-            taskAmount = numberOfTasks;
-            _outputFileWriter = new StreamWriter(outputFileName, append: true);
-            
-        }
+        private readonly ChannelReader<ItemToScan> _reader = unboundChannel.Reader;
+        private readonly int _taskAmount = numberOfTasks;
+        private readonly StreamWriter _outputFileWriter = new StreamWriter(outputFileName, append: true);
+        private readonly object _fileLock = new object();
 
         public async Task StartScanAsync(CancellationToken cancellationToken)
         {
             var tasks = new List<Task>();
 
-            for (int i = 0; i < taskAmount; i++)
+            for (int i = 0; i < _taskAmount; i++)
             {
                 tasks.Add(Task.Run(() => ScanPortsAsync(cancellationToken), cancellationToken));
             }
@@ -147,12 +138,12 @@ namespace port_scanner
             {
             
             
-                while (await reader.WaitToReadAsync(cancellationToken))
+                while (await _reader.WaitToReadAsync(cancellationToken))
                 {
                     if (cancellationToken.IsCancellationRequested) break;
 
 
-                    if (reader.TryRead(out ItemToScan task))
+                    if (_reader.TryRead(out ItemToScan task))
                     {
                         var ip = task.IP;
                         var port = task.Port;
@@ -165,7 +156,7 @@ namespace port_scanner
                             IsOpen = IsPortOpen
                         };
 
-                        lock (fileLock)
+                        lock (_fileLock)
                         {
                             _outputFileWriter.WriteLine(JsonSerializer.Serialize(result));
                             _outputFileWriter.Flush(); // Ensure data is written immediately
@@ -205,7 +196,7 @@ namespace port_scanner
 
     }
 
-       
+
     
     public class Program
     {
