@@ -195,11 +195,15 @@ namespace port_scanner
     
     public class Program
     {
+        public const string SubnetSeperator = "/";
+        public const string PortSeperator = ",";
+        public const string ExitCommand = "exit";
         public static async Task Main(string[] args)
         {
 
             using var cancellationTokenSource = new CancellationTokenSource();
             var cancellationToken = cancellationTokenSource.Token;
+            
 
             Console.WriteLine("Enter ip range(cidr notation supported) and ports");
             string? input = Console.ReadLine();
@@ -210,7 +214,7 @@ namespace port_scanner
                 while (true)
                 {
                     string additionalInput = Console.ReadLine()?.Trim().ToLower();
-                    if (additionalInput == "exit")
+                    if (additionalInput == ExitCommand)
                     {
                         Console.WriteLine("Exiting program...");
                         cancellationTokenSource.Cancel(); // Signal cancellation to all tasks
@@ -226,14 +230,14 @@ namespace port_scanner
                 int subnet = -1;
                 string[] words = input.Split(' ');
 
-                if(input.Contains("/"))
+                if(input.Contains(SubnetSeperator))
                 {
                     if (words.Length != 2){
                         Console.WriteLine("Invalid input!");
                         return;
                     }
 
-                    var parts = words[0].Split('/');
+                    var parts = words[0].Split(SubnetSeperator);
                     if (parts.Length != 2 || !IPAddress.TryParse(parts[0], out startIP) || !int.TryParse(parts[1], out subnet))
                     {
                         throw new ArgumentException("Invalid CIDR notation.");
@@ -254,7 +258,7 @@ namespace port_scanner
 
                     
                 }
-                string[] strPorts = words.Last().Split(',');
+                string[] strPorts = words.Last().Split(PortSeperator);
                 int[] ports = strPorts
                 .Select(s => int.TryParse(s, out int result) ? result : (int?)null)  // Use nullable int to handle failures
                 .Where(n => n.HasValue)   // Filter out nulls (failed parses)
